@@ -1,130 +1,85 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Modern Rooms Chat</title>
+<title>Chatter! Chat App</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: 'Segoe UI', sans-serif;
+body{
+ margin:0;
+ font-family:Segoe UI;
+ background: linear-gradient(135deg,#0f0f1a,#1f1f2e);
+ color:white;
+ display:flex;
+ height:100vh;
+ overflow:hidden;
 }
 
-body {
-    height: 100vh;
-    display: flex;
-    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-    color: white;
-    overflow: hidden;
+#sidebar{
+ width:260px;
+ background:rgba(255,255,255,0.05);
+ backdrop-filter:blur(20px);
+ padding:20px;
+ display:flex;
+ flex-direction:column;
 }
 
-#sidebar {
-    width: 250px;
-    background: rgba(0,0,0,0.4);
-    backdrop-filter: blur(15px);
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    border-right: 1px solid rgba(255,255,255,0.1);
+#rooms{flex:1;overflow:auto;}
+.room{
+ padding:10px;
+ border-radius:8px;
+ cursor:pointer;
+ margin-bottom:5px;
+ transition:.2s;
+}
+.room:hover{background:rgba(255,255,255,.1);}
+.active{background:#4da6ff;}
+
+#createRoom{
+ padding:10px;
+ border:none;
+ background:#4da6ff;
+ color:white;
+ border-radius:8px;
+ cursor:pointer;
 }
 
-#rooms {
-    flex: 1;
-    overflow-y: auto;
+#chat{flex:1;display:flex;flex-direction:column;}
+#messages{flex:1;padding:20px;overflow:auto;}
+.message{
+ background:rgba(255,255,255,.08);
+ padding:10px 15px;
+ border-radius:10px;
+ margin-bottom:10px;
+ animation:fade .2s ease;
+}
+.username{color:#4da6ff;font-weight:bold;}
+.typing{font-style:italic;color:#00ffc3;margin-left:20px;}
+
+@keyframes fade{
+ from{opacity:0;transform:translateY(10px);}
+ to{opacity:1;transform:translateY(0);}
 }
 
-.room {
-    padding: 10px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: 0.2s;
+#inputArea{display:flex;border-top:1px solid rgba(255,255,255,.1);}
+#msgInput{
+ flex:1;
+ padding:15px;
+ background:none;
+ border:none;
+ color:white;
+ font-size:16px;
+ outline:none;
 }
-
-.room:hover {
-    background: rgba(255,255,255,0.1);
-}
-
-.active-room {
-    background: rgba(77,166,255,0.3);
-}
-
-#createRoomBtn {
-    padding: 10px;
-    border: none;
-    background: #4da6ff;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: 0.3s;
-}
-
-#createRoomBtn:hover {
-    background: #3399ff;
-}
-
-#chat-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-#messages {
-    flex: 1;
-    padding: 20px;
-    overflow-y: auto;
-}
-
-.message {
-    margin-bottom: 10px;
-    padding: 10px 15px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 10px;
-    animation: fadeIn 0.3s ease;
-}
-
-.username {
-    font-weight: bold;
-    color: #4da6ff;
-}
-
-.system {
-    font-style: italic;
-    color: #00ffc3;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-#input-area {
-    display: flex;
-    border-top: 1px solid rgba(255,255,255,0.1);
-}
-
-#messageInput {
-    flex: 1;
-    padding: 15px;
-    background: transparent;
-    border: none;
-    color: white;
-    font-size: 16px;
-    outline: none;
-}
-
-#sendBtn {
-    padding: 15px 20px;
-    border: none;
-    background: #4da6ff;
-    cursor: pointer;
-    transition: 0.3s;
-}
-
-#sendBtn:hover {
-    background: #3399ff;
+#send{
+ padding:15px 20px;
+ border:none;
+ background:#4da6ff;
+ color:white;
+ cursor:pointer;
 }
 </style>
 </head>
@@ -132,103 +87,119 @@ body {
 <body>
 
 <div id="sidebar">
-    <h3>Rooms</h3>
-    <div id="rooms"></div>
-    <button id="createRoomBtn">+ Create Room</button>
+ <h3>Rooms</h3>
+ <div id="rooms"></div>
+ <button id="createRoom">+ Create Room</button>
 </div>
 
-<div id="chat-container">
-    <div id="messages"></div>
-    <div id="input-area">
-        <input type="text" id="messageInput" placeholder="Type message...">
-        <button id="sendBtn">Send</button>
-    </div>
+<div id="chat">
+ <div id="messages"></div>
+ <div id="typingIndicator"></div>
+ <div id="inputArea">
+   <input id="msgInput" placeholder="Type a message...">
+   <button id="send">Send</button>
+ </div>
 </div>
 
 <script>
+const supabase = window.supabase.createClient(
+ "https://aaftyaykokqpypdekinz.supabase.co",
+ "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhZnR5YXlrb2txcHlwZGVraW56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0Njg1MTgsImV4cCI6MjA4ODA0NDUxOH0.j6wLPXE6cdDc2uTVMKKTvtO1suz9K085YGIybd8q790"
+);
+
 let username = prompt("Enter username:");
-if (!username) username = "User" + Math.floor(Math.random()*1000);
+if(!username) username = "User" + Math.floor(Math.random()*1000);
 
 let currentRoom = "general";
 let rooms = ["general"];
-
-const ws = new WebSocket("wss://ws.postman-echo.com/raw");
+let typingTimeout;
 
 const roomsDiv = document.getElementById("rooms");
 const messagesDiv = document.getElementById("messages");
-const input = document.getElementById("messageInput");
+const typingDiv = document.getElementById("typingIndicator");
+const input = document.getElementById("msgInput");
 
-function renderRooms() {
-    roomsDiv.innerHTML = "";
-    rooms.forEach(room => {
-        const div = document.createElement("div");
-        div.className = "room" + (room === currentRoom ? " active-room" : "");
-        div.textContent = room;
-        div.onclick = () => switchRoom(room);
-        roomsDiv.appendChild(div);
-    });
+function renderRooms(){
+ roomsDiv.innerHTML = "";
+ rooms.forEach(r=>{
+   const div = document.createElement("div");
+   div.className = "room" + (r === currentRoom ? " active" : "");
+   div.textContent = r;
+   div.onclick = () => switchRoom(r);
+   roomsDiv.appendChild(div);
+ });
 }
 
-function switchRoom(room) {
-    currentRoom = room;
-    messagesDiv.innerHTML = "";
-    renderRooms();
-    addSystemMessage("Joined room: " + room);
+function switchRoom(room){
+ currentRoom = room;
+ messagesDiv.innerHTML = "";
+ loadMessages();
+ renderRooms();
 }
 
-function addMessage(user, text) {
-    const div = document.createElement("div");
-    div.className = "message";
-    div.innerHTML = "<span class='username'>" + user + ":</span> " + text;
-    messagesDiv.appendChild(div);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+async function loadMessages(){
+ const { data } = await supabase
+   .from("messages")
+   .select("*")
+   .eq("room", currentRoom)
+   .order("created_at",{ascending:true});
+
+ messagesDiv.innerHTML = "";
+ data.forEach(m => addMessage(m.username, m.text));
 }
 
-function addSystemMessage(text) {
-    const div = document.createElement("div");
-    div.className = "message system";
-    div.textContent = text;
-    messagesDiv.appendChild(div);
+function addMessage(user, text){
+ const div = document.createElement("div");
+ div.className = "message";
+ div.innerHTML = `<span class="username">${user}:</span> ${text}`;
+ messagesDiv.appendChild(div);
+ messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-ws.onmessage = (event) => {
-    try {
-        const data = JSON.parse(event.data);
-        if (data.room === currentRoom) {
-            addMessage(data.user, data.text);
-        }
-    } catch {}
+document.getElementById("send").onclick = async () => {
+ if (!input.value.trim()) return;
+
+ await supabase.from("messages").insert({
+   room: currentRoom,
+   username: username,
+   text: input.value
+ });
+
+ input.value = "";
+ typingDiv.innerHTML = "";
 };
 
-function sendMessage() {
-    if (!input.value.trim()) return;
-
-    const data = {
-        room: currentRoom,
-        user: username,
-        text: input.value
-    };
-
-    ws.send(JSON.stringify(data));
-    input.value = "";
-}
-
-document.getElementById("sendBtn").onclick = sendMessage;
-
-input.addEventListener("keypress", e => {
-    if (e.key === "Enter") sendMessage();
+input.addEventListener("input", () => {
+ typingDiv.innerHTML = `<div class="typing">${username} is typing...</div>`;
+ clearTimeout(typingTimeout);
+ typingTimeout = setTimeout(() => {
+   typingDiv.innerHTML = "";
+ }, 1200);
 });
 
-document.getElementById("createRoomBtn").onclick = () => {
-    const name = prompt("Room name:");
-    if (name && !rooms.includes(name)) {
-        rooms.push(name);
-        renderRooms();
-    }
+document.getElementById("createRoom").onclick = () => {
+ const name = prompt("Room name:");
+ if (name && !rooms.includes(name)) {
+   rooms.push(name);
+   renderRooms();
+ }
 };
 
+supabase
+ .channel("realtime")
+ .on("postgres_changes", {
+   event: "INSERT",
+   schema: "public",
+   table: "messages"
+ }, payload => {
+   if (payload.new.room === currentRoom) {
+     addMessage(payload.new.username, payload.new.text);
+   }
+ })
+ .subscribe();
+
 renderRooms();
-switchRoom("general");
+loadMessages();
 </script>
 
 </body>
